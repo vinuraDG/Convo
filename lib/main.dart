@@ -34,7 +34,7 @@ class MyApp extends StatelessWidget {
         '/onboarding': (context) => const OnboardingScreen(),
         '/phone': (context) => const PhoneNumberScreen(),
         '/otp': (context) => const OtpVerificationScreen(),
-        '/home': (context) => const Homescreen(),
+        '/home': (context) => const HomeScreen(),
       },
     );
   }
@@ -114,7 +114,7 @@ class AuthWrapper extends StatelessWidget {
                 }
 
                 if (authSnapshot.hasData) {
-                  return const Homescreen();
+                  return const HomeScreen();
                 }
 
                 // User was registered but logged out - go to phone screen

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PhoneNumberScreen extends StatefulWidget {
   const PhoneNumberScreen({super.key});
@@ -11,6 +12,7 @@ class PhoneNumberScreen extends StatefulWidget {
 
 class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
   final _phoneController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   String _selectedCountryCode = '+94'; // Sri Lanka default
@@ -27,6 +29,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -36,13 +39,17 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
     setState(() => _isLoading = true);
 
     final phoneNumber = '$_selectedCountryCode${_phoneController.text.trim()}';
+    final username = _usernameController.text.trim();
 
     try {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) async {
           // Auto-verification (Android only)
-          await FirebaseAuth.instance.signInWithCredential(credential);
+          final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+          if (userCredential.user != null) {
+            await _saveUsernameToFirebase(userCredential.user!.uid, username);
+          }
         },
         verificationFailed: (FirebaseAuthException e) {
           setState(() => _isLoading = false);
@@ -61,6 +68,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
             arguments: {
               'verificationId': verificationId,
               'phoneNumber': phoneNumber,
+              'username': username,
             },
           );
         },
@@ -75,6 +83,18 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  Future<void> _saveUsernameToFirebase(String uid, String username) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'username': username,
+        'phoneNumber': '$_selectedCountryCode${_phoneController.text.trim()}',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error saving username: $e');
     }
   }
 
@@ -123,7 +143,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
                       ],
                     ),
                     child: const Icon(
-                      Icons.phone_android_rounded,
+                      Icons.person_add_rounded,
                       size: 50,
                       color: Colors.white,
                     ),
@@ -134,7 +154,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
 
                 // Title
                 const Text(
-                  'Enter Your Phone Number',
+                  'Create Your Account',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
@@ -147,7 +167,7 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
 
                 // Subtitle
                 Text(
-                  'We\'ll send you a verification code to confirm your number',
+                  'Enter your details to get started with your account',
                   style: TextStyle(
                     fontSize: 15,
                     color: Colors.grey.shade600,
@@ -156,6 +176,82 @@ class _PhoneNumberScreenState extends State<PhoneNumberScreen> {
                 ),
 
                 const SizedBox(height: 40),
+
+                // Username Input
+                Text(
+                  'Username',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                TextFormField(
+                  controller: _usernameController,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.none,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                    LengthLimitingTextInputFormatter(20),
+                  ],
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Name',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.person_outline,
+                      color: Colors.grey.shade600,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: Colors.blue.shade400,
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red, width: 2),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a username';
+                    }
+                    if (value.length < 3) {
+                      return 'Username must be at least 3 characters';
+                    }
+                    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+                      return 'Only letters, numbers and underscore allowed';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 24),
 
                 // Country Code Selector
                 Text(
